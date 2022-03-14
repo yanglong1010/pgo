@@ -2,6 +2,7 @@ import * as core from '@serverless-devs/core';
 import { PGO } from './index';
 import * as minimist from 'minimist';
 import JavaStartupAccelerationComponent from "./javaMain";
+import PythonStartupAccelerationComponent from "./pythonMain";
 // import * as YAML from 'js-yaml';
 // import { join } from 'path';
 export default class PGOComponent {
@@ -33,6 +34,11 @@ export default class PGOComponent {
 
   async java(params) {
     const component = new JavaStartupAccelerationComponent(this.defaultAccess);
+    await component.index(params);
+  }
+
+  async python(params) {
+    const component = new PythonStartupAccelerationComponent(this.defaultAccess);
     await component.index(params);
   }
 
