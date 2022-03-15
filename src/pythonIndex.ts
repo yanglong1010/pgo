@@ -253,6 +253,7 @@ export class PythonStartupAcceleration {
   }
 
   private async downloadAccelerationFiles(fcClient, tmpServiceName: string, tmpFunctionName: string) {
+    await remove(this.artifactPath);
     let sharedDir = join(this.artifactPath, this.sharedDirName);
     await ensureDir(sharedDir);
     let localFile = join(sharedDir, ARCHIVE_NAME);
@@ -447,7 +448,7 @@ export class PythonStartupAcceleration {
   }
 
   private async copyFunctionFiles(toDir: string, funcType: string) {
-    info("copying files for " + funcType + " function")
+    info("copying files for " + funcType + " function to dir [" + toDir + "]")
 
     const fileList = await globby([join('code', '**')], {
       onlyFiles: false,
@@ -459,11 +460,13 @@ export class PythonStartupAcceleration {
 
     await Promise.all(fileList.map(file => {
       const filePath = join(this.pwd, file);
-      let targetPath = file.substring(file.indexOf(join("code", path.sep)) + join("code", path.sep).length);
-      targetPath = join(toDir, targetPath);
+      // info(sprintflib.sprintf("copying %s", filePath))
       if (fs.lstatSync(filePath).isDirectory()) {
         return;
       }
+
+      let targetPath = file.substring(file.indexOf(join("code", path.sep)) + join("code", path.sep).length);
+      targetPath = join(toDir, targetPath);
       return copySync(filePath, targetPath);
     }));
   }
