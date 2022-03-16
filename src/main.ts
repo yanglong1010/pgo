@@ -3,8 +3,7 @@ import { PGO } from './index';
 import * as minimist from 'minimist';
 import JavaStartupAccelerationComponent from "./javaMain";
 import PythonStartupAccelerationComponent from "./pythonMain";
-// import * as YAML from 'js-yaml';
-// import { join } from 'path';
+
 export default class PGOComponent {
   defaultAccess = 'default';
   constructor(params: any = {}) {
@@ -22,6 +21,12 @@ export default class PGOComponent {
     const access = params?.project?.access || this.defaultAccess;
     const credential = await this.getCredential(access);
     const endpoint = await this.getEndPoint();
+    if (args.lang === 'java') {
+      return await this.java(params);
+    }
+    if (args.lang == 'python') {
+      return await this.python(params);
+    }
     const pgoInstance = new PGO(process.cwd(), {
       initializer: params?.props?.initializer || 'index.initializer',
       credential,
@@ -60,5 +65,4 @@ export default class PGOComponent {
       ak: credential.AccessKeyID,
     };
   }
-
 }

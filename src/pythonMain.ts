@@ -1,11 +1,15 @@
 import * as core from '@serverless-devs/core';
 import * as path from "path";
 import {join} from "path";
-import {existsSync, readFile} from 'fs-extra'
+import {copy, existsSync, readFile} from 'fs-extra'
 import * as YAML from 'js-yaml';
 import * as child_process from 'child_process'
 import {ARTIFACT_DIR, error, info, NAS, OSS, SRPATH, STREAM} from "./common";
 import {PythonStartupAcceleration} from "./pythonIndex";
+import * as sprintflib from "sprintf-js";
+
+const AccelerationHelper = 'acceleration_helper.py';
+const AccelerationHelperSourcePath = join('..', 'resources', AccelerationHelper);
 
 export default class PythonStartupAccelerationComponent {
   defaultAccess = 'default';
@@ -15,6 +19,9 @@ export default class PythonStartupAccelerationComponent {
 
   async index(params) {
     let args = await this.parseArgs(params.argsObj);
+    if (args.initDir) {
+      return await this.initDir(args.initDir);
+    }
     let moduleName = args.moduleName;
     let serviceName = await this.getServiceConfig(moduleName, 'name');
     let functionName = await this.getFunctionConfig(moduleName, 'name');
@@ -117,6 +124,15 @@ export default class PythonStartupAccelerationComponent {
     });
 
     await instance.gen();
+  }
+
+  async initDir(targetDir) {
+    let pwd = process.cwd();
+    let helperSourcePath = join(__dirname, AccelerationHelperSourcePath);
+    let helperTargetPath = join(pwd, targetDir, AccelerationHelper);
+    await copy(helperSourcePath, helperTargetPath);
+    info(sprintflib.sprintf("acceleration helper file [%s] copied to [%s]", helperSourcePath, helperTargetPath));
+    info("completed");
   }
 
   async getCredential(access) {
@@ -235,10 +251,16 @@ export default class PythonStartupAccelerationComponent {
       initTimeout: 5 * 60,
       timeout: 60 * 60,
       maxMemory: 8192,
-      enable: false
+      enable: false,
+      initDir: false
     };
 
     const argv = require('yargs/yargs')(argStr).argv;
+
+    if (argv.initDir) {
+      args.initDir = argv.initDir;
+      return args;
+    }
 
     if (argv.enable) {
       args.enable = true;

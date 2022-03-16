@@ -31,7 +31,6 @@ export class PGO {
   }
 
   async genDump(args) {
-
     const pkgJsonFIle = join(this.pwd, 'package.json');
     if (!existsSync(pkgJsonFIle)) {
       console.log('无 package.json 文件，跳过 Alinode PGO 生成');
@@ -72,7 +71,7 @@ exports.${initializerFun} = async (context, callback) => {
   }
 };`);
     }
-    
+
     // 拷贝所有文件
     const fileList = await globby(['**'], {
       onlyFiles: false,
@@ -84,7 +83,7 @@ exports.${initializerFun} = async (context, callback) => {
     });
 
 
-    
+
 
 
     await Promise.all(fileList.map(file => {
@@ -115,7 +114,7 @@ exports.${initializerFun} = async (context, callback) => {
     const tmpZipFile = `${tmpName}.zip`;
     const tmpZipFilePath = join(tmpdir(), tmpZipFile);
     await this.makeZip(tmpDir, tmpZipFilePath);
-    
+
     // 获取阿里云账号信息
     const { accountId, ak, secret } = this.defaultCredential;
     const fcClient = new FCClientInner(accountId, {
@@ -180,7 +179,7 @@ exports.${initializerFun} = async (context, callback) => {
       buffer = Buffer.concat([buffer, buf]);
       currentLen += curPartSize;
     }
-    
+
     const pgorrc = join(this.pwd, 'require_cache.strrc');
     await writeFile(pgorrc, buffer);
     // 清理

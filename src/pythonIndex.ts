@@ -27,7 +27,6 @@ import got from 'got';
 import {promisify} from "util";
 import * as stream from "stream";
 import * as fs from "fs";
-import {copyFileSync} from "fs";
 import * as sprintflib from "sprintf-js";
 
 const Crypto = require('crypto-js');
@@ -410,7 +409,6 @@ export class PythonStartupAcceleration {
 
   private async genZip(dir: string, zipFilePath: string) {
     await this.makeZip(dir, zipFilePath);
-    copyFileSync(zipFilePath, "/Users/yanglong/Downloads/test/app.zip");
     info("zip file created");
   }
 
