@@ -97,6 +97,7 @@ export default class LangStartupAccelerationComponent {
     let maxMemory = args.maxMemory;
     let funcEnvVars = await this.getFunctionEnvVars(moduleName);
     let tmpFunctionInstanceType = args.tmpFunctionInstanceType;
+    let builder = args.builder;
     let instance;
     if (args.lang == 'java') {
       instance = new JavaStartupAcceleration(process.cwd(), {
@@ -125,7 +126,8 @@ export default class LangStartupAccelerationComponent {
         serviceName,
         functionName,
         funcEnvVars,
-        tmpFunctionInstanceType
+        tmpFunctionInstanceType,
+        builder
       });
     } else if (args.lang == 'python') {
       instance = new PythonStartupAcceleration(process.cwd(), {
@@ -292,7 +294,8 @@ export default class LangStartupAccelerationComponent {
       maxMemory: 8192,
       enable: false,
       initDir: false,
-      tmpFunctionInstanceType: 'c1'
+      tmpFunctionInstanceType: 'c1',
+      builder: 'maven'
     };
 
     const argv = require('yargs/yargs')(argStr).argv;
@@ -300,6 +303,10 @@ export default class LangStartupAccelerationComponent {
     if (argv.initDir) {
       args.initDir = argv.initDir;
       return args;
+    }
+
+    if (argv.builder == 'gradle') {
+      args.builder = argv.builder;
     }
 
     if (argv.enable) {

@@ -22,6 +22,7 @@ import {
   tmpZipFilePath
 } from "./langIndex";
 import * as sprintflib from "sprintf-js";
+import * as fs from "fs";
 
 export const AccelerationHelperTargetPath = join('src', 'main', 'java', 'AccelerationHelper.java');
 export const AccelerationHelperSourcePath = join('..', 'resources', 'AccelerationHelper.java');
@@ -218,12 +219,21 @@ export class JavaStartupAcceleration extends LangStartupAcceleration {
     info('building... please wait');
 
     // compile
-    let output = child_process.execSync('mvn clean compile -Dmaven.test.skip=true');
-    info(output.toString());
+    if (this.builder == 'gradle') {
+      let output = child_process.execSync('gradle clean build');
+      info(output.toString());
 
-    // download dependencies
-    output = child_process.execSync('mvn -DoutputDirectory=' + join(this.targetPath, 'lib') + ' dependency:copy-dependencies');
-    info(output.toString());
+      // download dependencies
+      output = child_process.execSync('gradle copyDependencies -Plibdir=' + join(this.targetPath, 'lib'));
+      info(output.toString());
+    } else {
+      let output = child_process.execSync('mvn clean compile -Dmaven.test.skip=true');
+      info(output.toString());
+
+      // download dependencies
+      output = child_process.execSync('mvn -DoutputDirectory=' + join(this.targetPath, 'lib') + ' dependency:copy-dependencies');
+      info(output.toString());
+    }
 
     // copy target files
     await this.copyFunctionFiles(tmpDir, "assistant");
@@ -258,15 +268,20 @@ export class JavaStartupAcceleration extends LangStartupAcceleration {
 
     await Promise.all(fileList.map(file => {
       const filePath = join(this.pwd, file);
-      if (file == join("target", "classes") || file == join("target", "lib")) {
-        return
+      if (fs.lstatSync(filePath).isDirectory()) {
+        return;
       }
 
       let targetPath = file.substring(file.indexOf(join("target", path.sep)) + join("target", path.sep).length);
 
       let c = join("classes", path.sep);
       if (filePath.indexOf(c) >= 0) {
-        targetPath = targetPath.substring(targetPath.indexOf(c) + c.length);
+        let cc = join("classes", "java", "main", path.sep);
+        if (filePath.indexOf(cc) >= 0) {
+          targetPath = targetPath.substring(targetPath.indexOf(cc) + cc.length);
+        } else {
+          targetPath = targetPath.substring(targetPath.indexOf(c) + c.length);
+        }
       }
 
       targetPath = join(toDir, targetPath);

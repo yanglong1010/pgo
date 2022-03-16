@@ -73,17 +73,19 @@ export abstract class LangStartupAcceleration {
     functionName;
     funcEnvVars;
     tmpFunctionInstanceType;
+    builder;
 
     constructor(pwd: string, config) {
         const { region, fcEndpoint, access, runtime, initializer, credential, role, logConfig, sharedDirName, downloader,
             uploader, ossUtilUrl, ossBucket, ossKey, ossEndpoint, vpcConfig, nasConfig, srpath, maxMemory, timeout,
-            initTimeout, enable, serviceName, functionName, funcEnvVars, tmpFunctionInstanceType } = config;
+            initTimeout, enable, serviceName, functionName, funcEnvVars, tmpFunctionInstanceType, builder } = config;
         this.region = region;
         this.runtime = runtime;
         this.initializer = initializer;
         this.defaultCredential = credential;
         this.access = access;
         this.pwd = pwd;
+        this.builder = builder;
         this.artifactPath = join(process.cwd(), 'target', 'artifact');
         this.targetPath = join(process.cwd(), 'target');
         this.role = role;
