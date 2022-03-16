@@ -1,8 +1,7 @@
 import * as core from '@serverless-devs/core';
 import { PGO } from './index';
 import * as minimist from 'minimist';
-import JavaStartupAccelerationComponent from "./javaMain";
-import PythonStartupAccelerationComponent from "./pythonMain";
+import LangStartupAccelerationComponent from "./langMain";
 
 export default class PGOComponent {
   defaultAccess = 'default';
@@ -21,11 +20,8 @@ export default class PGOComponent {
     const access = params?.project?.access || this.defaultAccess;
     const credential = await this.getCredential(access);
     const endpoint = await this.getEndPoint();
-    if (args.lang === 'java') {
-      return await this.java(params);
-    }
-    if (args.lang == 'python') {
-      return await this.python(params);
+    if (args.lang === 'java' || args.lang == 'python') {
+      return await this.langIndex(params);
     }
     const pgoInstance = new PGO(process.cwd(), {
       initializer: params?.props?.initializer || 'index.initializer',
@@ -37,13 +33,8 @@ export default class PGOComponent {
     await pgoInstance.gen(args);
   }
 
-  async java(params) {
-    const component = new JavaStartupAccelerationComponent(this.defaultAccess);
-    await component.index(params);
-  }
-
-  async python(params) {
-    const component = new PythonStartupAccelerationComponent(this.defaultAccess);
+  async langIndex(params) {
+    const component = new LangStartupAccelerationComponent(this.defaultAccess);
     await component.index(params);
   }
 

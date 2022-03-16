@@ -5,13 +5,14 @@ import {copy, existsSync, readFile} from 'fs-extra'
 import * as YAML from 'js-yaml';
 import * as child_process from 'child_process'
 import {ARTIFACT_DIR, error, info, NAS, OSS, SRPATH, STREAM} from "./common";
-import {PythonStartupAcceleration} from "./pythonIndex";
 import * as sprintflib from "sprintf-js";
+import {JavaStartupAcceleration} from "./javaIndex";
+import {PythonStartupAcceleration} from "./pythonIndex";
 
-const AccelerationHelper = 'acceleration_helper.py';
-const AccelerationHelperSourcePath = join('..', 'resources', AccelerationHelper);
+const PyAccelerationHelper = 'acceleration_helper.py';
+const PyAccelerationHelperSourcePath = join('..', 'resources', PyAccelerationHelper);
 
-export default class PythonStartupAccelerationComponent {
+export default class LangStartupAccelerationComponent {
   defaultAccess = 'default';
   constructor(defaultAccess) {
     this.defaultAccess = defaultAccess;
@@ -95,41 +96,78 @@ export default class PythonStartupAccelerationComponent {
     let timeout = args.timeout;
     let maxMemory = args.maxMemory;
     let funcEnvVars = await this.getFunctionEnvVars(moduleName);
-    const instance = new PythonStartupAcceleration(process.cwd(), {
-      region,
-      fcEndpoint,
-      access,
-      runtime,
-      sharedDirName,
-      initializer,
-      credential,
-      role,
-      logConfig,
-      downloader,
-      uploader,
-      ossUtilUrl,
-      ossBucket,
-      ossKey,
-      ossEndpoint,
-      vpcConfig,
-      nasConfig,
-      srpath,
-      initTimeout,
-      timeout,
-      maxMemory,
-      enable,
-      serviceName,
-      functionName,
-      funcEnvVars
-    });
+    let tmpFunctionInstanceType = args.tmpFunctionInstanceType;
+    let instance;
+    if (args.lang == 'java') {
+      instance = new JavaStartupAcceleration(process.cwd(), {
+        region,
+        fcEndpoint,
+        access,
+        runtime,
+        sharedDirName,
+        initializer,
+        credential,
+        role,
+        logConfig,
+        downloader,
+        uploader,
+        ossUtilUrl,
+        ossBucket,
+        ossKey,
+        ossEndpoint,
+        vpcConfig,
+        nasConfig,
+        srpath,
+        initTimeout,
+        timeout,
+        maxMemory,
+        enable,
+        serviceName,
+        functionName,
+        funcEnvVars,
+        tmpFunctionInstanceType
+      });
+    } else if (args.lang == 'python') {
+      instance = new PythonStartupAcceleration(process.cwd(), {
+        region,
+        fcEndpoint,
+        access,
+        runtime,
+        sharedDirName,
+        initializer,
+        credential,
+        role,
+        logConfig,
+        downloader,
+        uploader,
+        ossUtilUrl,
+        ossBucket,
+        ossKey,
+        ossEndpoint,
+        vpcConfig,
+        nasConfig,
+        srpath,
+        initTimeout,
+        timeout,
+        maxMemory,
+        enable,
+        serviceName,
+        functionName,
+        funcEnvVars,
+        tmpFunctionInstanceType
+      });
+    } else {
+      error(sprintflib.sprintf("unsupported lang %s"));
+      return;
+    }
 
     await instance.gen();
   }
 
   async initDir(targetDir) {
     let pwd = process.cwd();
-    let helperSourcePath = join(__dirname, AccelerationHelperSourcePath);
-    let helperTargetPath = join(pwd, targetDir, AccelerationHelper);
+    let helperSourcePath = join(__dirname, PyAccelerationHelperSourcePath);
+    let helperTargetPath = join(pwd, targetDir, PyAccelerationHelper);
     await copy(helperSourcePath, helperTargetPath);
     info(sprintflib.sprintf("acceleration helper file [%s] copied to [%s]", helperSourcePath, helperTargetPath));
     info("completed");
@@ -245,6 +283,7 @@ export default class PythonStartupAccelerationComponent {
   async parseArgs(argStr) {
     info('pgo args: ' + argStr);
     let args = {
+      lang: '',
       uploader: 'stream',
       downloader: 'oss',
       moduleName: '',
@@ -252,7 +291,8 @@ export default class PythonStartupAccelerationComponent {
       timeout: 60 * 60,
       maxMemory: 8192,
       enable: false,
-      initDir: false
+      initDir: false,
+      tmpFunctionInstanceType: 'c1'
     };
 
     const argv = require('yargs/yargs')(argStr).argv;
@@ -266,6 +306,12 @@ export default class PythonStartupAccelerationComponent {
       args.enable = true;
     }
 
+    if (argv.lang) {
+      args.lang = argv.lang;
+    } else {
+      throw new Error('lang name is required');
+    }
+
     if (argv.module) {
       args.moduleName = argv.module;
     } else {
@@ -275,9 +321,15 @@ export default class PythonStartupAccelerationComponent {
     if (parseInt(argv.initTimeout) > 0) {
       args.initTimeout = parseInt(argv.initTimeout);
     }
+
     if (parseInt(argv.timeout) > 0) {
       args.timeout = parseInt(argv.timeout);
     }
+
+    if (argv.instanceType) {
+      args.tmpFunctionInstanceType = argv.instanceType;
+    }
+
     if (parseInt(argv.maxMemory) > 0) {
       args.maxMemory = parseInt(argv.maxMemory);
     }

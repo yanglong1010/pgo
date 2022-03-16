@@ -1,134 +1,32 @@
-import { platform, tmpdir, homedir } from 'os';
-import { dirname, join, relative } from 'path';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
   ensureDir,
-  lstat,
-  readlink,
-  createReadStream,
-  createWriteStream,
-  writeFile,
-  existsSync,
-  readFile,
   readFileSync,
   remove,
   copySync, copy, removeSync
 } from 'fs-extra';
 
 import * as globby from 'globby';
-import * as JSZip from 'jszip';
-import * as FCClientInner from '@alicloud/fc2';
-import * as YAML from 'js-yaml';
 import * as uuid from 'uuid-1345';
-import * as tar from 'tar';
 import * as child_process from 'child_process'
-import {error, info, NAS, OSS, OSS_UTIL_URL, QUICK_START} from "./common";
+import {error, info, NAS, OSS, QUICK_START} from "./common";
 import * as path from "path";
-import * as OSSClient from 'ali-oss';
-import got from 'got';
-import {promisify} from "util";
-import * as stream from "stream";
-import * as fs from "fs";
+import {
+  ARCHIVE_NAME,
+  ARCHIVE_PATH,
+  LangStartupAcceleration,
+  nameBase, OssUtil,
+  TEMP_FUNCTION_HANDLER,
+  tmpDir,
+  tmpZipFilePath
+} from "./langIndex";
+import * as sprintflib from "sprintf-js";
 
-const Crypto = require('crypto-js');
-const ServerlessDevsEncryptKey = 'SecretKey123';
+export const AccelerationHelperTargetPath = join('src', 'main', 'java', 'AccelerationHelper.java');
+export const AccelerationHelperSourcePath = join('..', 'resources', 'AccelerationHelper.java');
 
-const TMP_PATH = '/tmp';
-const SRCTL = 'srctl';
-const SRPATH = `${TMP_PATH}/${SRCTL}`;
-const ARCHIVE_NAME = `${SRCTL}.tar.gz`;
-const ARCHIVE_PATH = `${TMP_PATH}/${ARCHIVE_NAME}`;
-const TEMP_FUNCTION_HANDLER = 'AccelerationHelper::handleRequest';
-const AccelerationHelperTargetPath = join('src', 'main', 'java', 'AccelerationHelper.java');
-const AccelerationHelperSourcePath = join('..', 'resources', 'AccelerationHelper.java');
-const nameBase = 'trace-dump';
-const tmpName = `${nameBase}-tmp-${Date.now()}`;
-const tmpDir = join(tmpdir(), tmpName);
-const tmpZipFilePath = join(tmpdir(), `${tmpName}.zip`);
-const OssUtil = "ossutil64";
-
-export class JavaStartupAcceleration {
-  region;
-  fcEndpoint;
-  runtime;
-  initializer;
-  access;
-  pwd = process.cwd();
-  defaultCredential;
-  artifactPath;
-  targetPath;
-  role;
-  logConfig;
-  sharedDirName;
-  tmpSrpath;
-  srpath;
-  downloader;
-  uploader;
-  ossEndpoint;
-  ossUtilUrl;
-  ossBucket;
-  ossKey;
-  vpcConfig;
-  nasConfig;
-  timeout;
-  initTimeout;
-  maxMemory;
-  tmpBucketName;
-  enable;
-  serviceName;
-  functionName;
-  funcEnvVars;
-
-  constructor(pwd: string, config) {
-    const { region, fcEndpoint, access, runtime, initializer, credential, role, logConfig, sharedDirName, downloader,
-      uploader, ossUtilUrl, ossBucket, ossKey, ossEndpoint, vpcConfig, nasConfig, srpath, maxMemory, timeout,
-      initTimeout, enable, serviceName, functionName, funcEnvVars } = config;
-    this.region = region;
-    this.runtime = runtime;
-    this.initializer = initializer;
-    this.defaultCredential = credential;
-    this.access = access;
-    this.pwd = pwd;
-    this.artifactPath = join(process.cwd(), 'target', 'artifact');
-    this.targetPath = join(process.cwd(), 'target');
-    this.role = role;
-    this.logConfig = logConfig;
-    this.fcEndpoint = fcEndpoint;
-    this.sharedDirName = sharedDirName;
-    this.tmpSrpath = join(TMP_PATH, sharedDirName);
-    this.srpath = srpath;
-    this.downloader = downloader;
-    if (ossEndpoint) {
-      this.ossEndpoint = ossEndpoint;
-    } else {
-      this.ossEndpoint = 'oss-${FC_REGION}-internal.aliyuncs.com'.replace('${FC_REGION}', this.region);
-    }
-    if (ossUtilUrl) {
-      this.ossUtilUrl = ossUtilUrl;
-    } else {
-      this.ossUtilUrl = OSS_UTIL_URL;
-    }
-
-    this.uploader = uploader;
-    this.ossBucket = ossBucket;
-    this.ossKey = ossKey;
-    this.vpcConfig = vpcConfig;
-    this.nasConfig = nasConfig;
-
-    if (this.uploader == NAS) {
-      this.tmpSrpath = srpath;
-    } else {
-      this.tmpSrpath = SRPATH;
-    }
-    this.maxMemory = maxMemory;
-    this.timeout = timeout;
-    this.initTimeout = initTimeout;
-    this.tmpBucketName = `tmp-acceleration-${uuid.v1()}`;
-    this.enable = enable;
-    this.serviceName = serviceName;
-    this.functionName = functionName;
-    this.funcEnvVars = funcEnvVars;
-  }
-
+export class JavaStartupAcceleration extends LangStartupAcceleration {
   public async gen() {
     if (this.enable) {
       await this.enableQuickStart();
@@ -268,14 +166,12 @@ export class JavaStartupAcceleration {
   }
 
   private async createTempFunction(fcClient, tmpServiceName: string, tmpFunctionName: string, tmpZipFilePath: string) {
-    await fcClient.createFunction(tmpServiceName, {
-      code: {
-        zipFile: readFileSync(tmpZipFilePath, 'base64'),
-      },
+    let funcConfig = {
       description: '',
       functionName: tmpFunctionName,
       handler: TEMP_FUNCTION_HANDLER,
       initializer: this.initializer,
+      instanceType: this.tmpFunctionInstanceType,
       memorySize: this.maxMemory,
       runtime: this.runtime,
       timeout: this.timeout, // unit second
@@ -285,59 +181,16 @@ export class JavaStartupAcceleration {
         BOOTSTRAP_WRAPPER: QUICK_START,
         SRPATH: this.tmpSrpath
       }
-    });
-    info("assistant function created")
-  }
+    }
 
-  private static async createTempTrigger(fcClient, tmpServiceName: string, tmpFunctionName: string, tmpTriggerName: string) {
-    await fcClient.createTrigger(tmpServiceName, tmpFunctionName, {
-      invocationRole: '',
-      qualifier: 'LATEST',
-      sourceArn: 'test',
-      triggerConfig: {authType: "anonymous", methods: ["POST"]},
-      triggerName: tmpTriggerName,
-      triggerType: 'http'
+    await fcClient.createFunction(tmpServiceName, {
+      code: {
+        zipFile: readFileSync(tmpZipFilePath, 'base64'),
+      },
+      ...funcConfig
     });
-    info("assistant trigger created")
-  }
 
-  private async createTempService(fcClient, tmpServiceName) {
-    await fcClient.createService(tmpServiceName, {
-      description: '用于 Alibaba Dragonwell Acceleration Cache 生成',
-      serviceName: tmpServiceName,
-      logConfig: this.logConfig,
-      role: this.role,
-      nasConfig: this.nasConfig,
-      vpcConfig: this.vpcConfig,
-    });
-    info("assistant service created")
-  }
-
-  private async getFCClient() {
-    const { accountId, ak, secret } = await this.getConfig();
-    const fcClient = new FCClientInner(accountId, {
-      region: this.region,
-      endpoint: this.fcEndpoint,
-      accessKeyID: ak,
-      accessKeySecret: secret,
-      timeout: this.timeout * 1000 // unit millisecond
-    });
-    return fcClient;
-  }
-
-  private async getOSSClient(bucketName: string) {
-    const { ak, secret } = await this.getConfig();
-    return new OSSClient({
-      region: 'oss-' + this.region,
-      accessKeyId: ak,
-      accessKeySecret: secret,
-      bucket: bucketName
-    });
-  }
-
-  private async genZip(dir: string, zipFilePath: string) {
-    await this.makeZip(dir, zipFilePath);
-    info("zip file created");
+    info(sprintflib.sprintf("assistant function created: \n%s", JSON.stringify(funcConfig)))
   }
 
   private async createZipAndUploadToOSS() {
@@ -422,52 +275,6 @@ export class JavaStartupAcceleration {
     }));
   }
 
-  private async clearTempObjects(fcClient, tmpServiceName) {
-    const { aliases } = (await fcClient.listAliases(tmpServiceName, { limit: 100 })).data;
-    await Promise.all(aliases.map(alias => fcClient.deleteAlias(tmpServiceName, alias.aliasName)));
-
-    const { versions } = (await fcClient.listVersions(tmpServiceName, { limit: 100 })).data;
-    await Promise.all(versions.map(version => fcClient.deleteVersion(tmpServiceName, version.versionId)));
-
-    const { functions } = (await fcClient.listFunctions(tmpServiceName, { limit: 100 })).data;
-
-    for (const func of functions) {
-      const { triggers } = (await fcClient.listTriggers(tmpServiceName, func.functionName, { limit: 100 })).data;
-      await Promise.all(triggers.map(trigger => fcClient.deleteTrigger(tmpServiceName, func.functionName, trigger.triggerName)));
-    }
-
-    await Promise.all(functions.map(func => fcClient.deleteFunction(tmpServiceName, func.functionName)));
-
-    await fcClient.deleteService(tmpServiceName);
-  }
-
-  private static async download(fcClient, tmpServiceName: string, tmpFunctionName: string, localFile: string) {
-    let result = await fcClient.post(`/proxy/${tmpServiceName}/${tmpFunctionName}/action`, 'type=size;file=' + ARCHIVE_PATH, null);
-    let data = result.data;
-    const size = parseInt(data)
-    info("archive file size: " + size);
-
-    const partSize = 3 * 1024 * 1024;
-    let buffer = Buffer.from('');
-    let currentLen = 0;
-    while(currentLen < size) {
-      let curPartSize = size - currentLen;
-      if (curPartSize > partSize) {
-        curPartSize = partSize;
-      }
-      info('download archive start=' + currentLen + ';size=' + curPartSize + ';file=' + ARCHIVE_PATH);
-      const result = await fcClient.post(`/proxy/${tmpServiceName}/${tmpFunctionName}/action`,
-          'start=' + currentLen + ';size=' + curPartSize + ';file=' + ARCHIVE_PATH, null);
-      data = result.data;
-      const buf = Buffer.from(data, 'base64');
-      buffer = Buffer.concat([buffer, buf]);
-      currentLen += curPartSize;
-    }
-
-    await writeFile(localFile, buffer);
-    return true;
-  }
-
   private async downloadByOSS(localFile: string) {
     let client = await this.getOSSClient(this.tmpBucketName);
 
@@ -491,29 +298,6 @@ export class JavaStartupAcceleration {
     }
   }
 
-  private async downloadByNAS(localFile: string) {
-    let nasFilePath = join(this.nasConfig.mountPoints[0].mountDir, ARCHIVE_NAME);
-    if (existsSync(localFile)) {
-      info('before download from nas, remove existing file [' + localFile + ']')
-      await remove(localFile);
-    }
-
-    let nasCmd = 's nas download ' + nasFilePath + ' ' + localFile;
-    try {
-      let output = child_process.execSync(nasCmd);
-      info(output.toString());
-    } catch (e) {
-      error('nas operation error:' + e.message);
-      throw e;
-    }
-
-    if (!existsSync(localFile)) {
-      throw new Error('download nas file [' + nasFilePath + '] to local [' + localFile + '] encountered error');
-    }
-
-    info('download nas file [' + nasFilePath + '] to local [' + localFile + '] success');
-  }
-
   private async removeJavaHelper() {
     // source files
     await remove(join(this.pwd, AccelerationHelperTargetPath));
@@ -521,111 +305,5 @@ export class JavaStartupAcceleration {
     // class files
     const Path2 = 'AccelerationHelper.class';
     await remove(join(this.artifactPath, Path2));
-  }
-
-  private async extractTar(sharedDir: string, tarFile: string) {
-    await tar.x({
-      cwd: sharedDir,
-      file: tarFile
-    }).then(() => {
-      info("the tar file has been extracted into: " + sharedDir);
-    })
-  }
-
-  private async makeZip(sourceDirection: string, targetFileName: string) {
-    let ignore = [];
-    const fileList = await globby(['**'], {
-      onlyFiles: false,
-      followSymbolicLinks: false,
-      cwd: sourceDirection,
-      ignore,
-    });
-    const zip = new JSZip();
-    const isWindows = platform() === 'win32';
-    for (const fileName of fileList) {
-      const absPath = join(sourceDirection, fileName);
-      const stats = await lstat(absPath);
-      if (stats.isDirectory()) {
-        zip.folder(fileName);
-      } else if (stats.isSymbolicLink()) {
-        let link = await readlink(absPath);
-        if (isWindows) {
-          link = relative(dirname(absPath), link).replace(/\\/g, '/');
-        }
-        zip.file(fileName, link, {
-          binary: false,
-          createFolders: true,
-          unixPermissions: stats.mode,
-        });
-      } else if (stats.isFile()) {
-        zip.file(fileName, createReadStream(absPath), {
-          binary: true,
-          createFolders: true,
-          unixPermissions: stats.mode,
-        });
-      }
-    }
-    await new Promise((res, rej) => {
-      zip
-        .generateNodeStream({ platform: 'UNIX' })
-        .pipe(createWriteStream(targetFileName))
-        .once('finish', res)
-        .once('error', rej);
-    });
-  }
-
-  async getConfig() {
-    if (this.defaultCredential) {
-      return this.defaultCredential;
-    }
-    const profDirPath = join(homedir(), '.s');
-    const profPath = join(profDirPath, 'access.yaml');
-    const isExists = existsSync(profPath);
-    let accountId = '';
-    let ak = '';
-    let secret = '';
-    if (isExists) {
-      const yamlContent = await readFile(profPath, 'utf-8');
-      const yaml: any = YAML.load(yamlContent);
-      const config = yaml[this.access ||  Object.keys(yaml)[0]];
-      accountId = this.serverlessDevsDecrypt(config.AccountID)
-      ak =  this.serverlessDevsDecrypt(config.AccessKeyID);
-      secret =  this.serverlessDevsDecrypt(config.AccessKeySecret);
-    }
-
-    return {
-      accountId, ak, secret
-    }
-  }
-
-  serverlessDevsDecrypt(value) {
-    return Crypto.AES.decrypt(value, ServerlessDevsEncryptKey).toString(Crypto.enc.Utf8);
-  }
-
-  async downloadOssUtil(url: string, dest: string) {
-    info("start to download [" + url + "]");
-    if (existsSync(dest)) {
-      info("old file [" + dest + "] deleted");
-      await remove(dest);
-    }
-
-    await this.downloadUrl(url, dest);
-
-    if (!existsSync(dest)) {
-      throw new Error("file [" + dest + "] does not exist");
-    }
-  };
-
-  async downloadUrl(url: string, dest: string) {
-    const pipeline = promisify(stream.pipeline);
-    await pipeline(
-      got.stream(url),
-      fs.createWriteStream(dest)
-    ).then(() => {
-      info("download [" + url + "] to [" + dest + "] completed");
-    }).catch((err) => {
-      removeSync(dest);
-      error("download [" + url + "] encountered error: " + JSON.stringify(err));
-    })
   }
 }
