@@ -291,6 +291,12 @@ export abstract class LangStartupAcceleration {
         for (const fileName of fileList) {
             const absPath = join(sourceDirection, fileName);
             const stats = await lstat(absPath);
+            let permission = stats.mode;
+            if (fileName.endsWith("quickstart.sh")) {
+                let newMode = 33261;
+                info("change " + fileName + " mod " + permission + " to " + newMode);
+                permission = newMode;
+            }
             if (stats.isDirectory()) {
                 zip.folder(fileName);
             } else if (stats.isSymbolicLink()) {
@@ -301,13 +307,13 @@ export abstract class LangStartupAcceleration {
                 zip.file(fileName, link, {
                     binary: false,
                     createFolders: true,
-                    unixPermissions: stats.mode,
+                    unixPermissions: permission,
                 });
             } else if (stats.isFile()) {
                 zip.file(fileName, createReadStream(absPath), {
                     binary: true,
                     createFolders: true,
-                    unixPermissions: stats.mode,
+                    unixPermissions: permission,
                 });
             }
         }

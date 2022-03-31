@@ -11,7 +11,6 @@ import * as globby from 'globby';
 import * as uuid from 'uuid-1345';
 import * as child_process from 'child_process'
 import {error, info, NAS, OSS, QUICK_START} from "./common";
-import * as path from "path";
 import {
   ARCHIVE_NAME,
   ARCHIVE_PATH,
@@ -254,17 +253,16 @@ export class JavaStartupAcceleration extends LangStartupAcceleration {
     await copy(join(__dirname, '..', 'resources', 'quickstart.sh'), join(toDir, 'quickstart.sh'));
     await copy(join(__dirname, '..', 'resources', 'classloader-config.xml'), join(toDir, 'sr', 'classloader-config.xml'));
 
-    const fileList = await globby([join('target', '**')], {
+    const fileList = await globby(['target/**'], {
       onlyFiles: false,
       followSymbolicLinks: false,
       cwd: this.pwd,
       ignore: [
-        join("target", "artifact"),
-        join("target", "sr"),
-        join("target", "maven*", "**"),
-        join("target", "dependency", "**"),
-        join("target", "*sources*"),
-        join("target", "*sources*", "**")
+        join("target/artifact"),
+        join("target/sr"),
+        join("target/maven*/**"),
+        join("target/dependency/**"),
+        join("target/*sources**"),
       ],
     });
 
@@ -274,12 +272,12 @@ export class JavaStartupAcceleration extends LangStartupAcceleration {
         return;
       }
 
-      let targetPath = file.substring(file.indexOf(join("target", path.sep)) + join("target", path.sep).length);
+      let targetPath = file.substring(file.indexOf("target/") + "target/".length);
 
-      let c = join("classes", path.sep);
-      if (filePath.indexOf(c) >= 0) {
-        let cc = join("classes", "java", "main", path.sep);
-        if (filePath.indexOf(cc) >= 0) {
+      let c = "classes/";
+      if (targetPath.indexOf(c) >= 0) {
+        let cc = "classes/java/main/";
+        if (targetPath.indexOf(cc) >= 0) {
           targetPath = targetPath.substring(targetPath.indexOf(cc) + cc.length);
         } else {
           targetPath = targetPath.substring(targetPath.indexOf(c) + c.length);
@@ -287,6 +285,7 @@ export class JavaStartupAcceleration extends LangStartupAcceleration {
       }
 
       targetPath = join(toDir, targetPath);
+      info("copy file [" + file + "] to [" + targetPath + "]");
 
       return copySync(filePath, targetPath);
     }));
